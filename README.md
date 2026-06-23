@@ -1,6 +1,6 @@
 # claude2doc
 
-Paste Claude's markdown output directly into a Google Doc — formatted headers, bold, code blocks and all — without touching the clipboard or browser.
+Paste Claude's markdown output directly into a Google Doc with formatted headers, bold, code blocks, etc, without touching the clipboard or browser.
 
 ## How it works
 
