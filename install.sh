@@ -7,6 +7,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "=== claude2doc installer ==="
 echo ""
 
+# Check we have write access
+if [[ ! -w "$(dirname "$INSTALL_PATH")" ]]; then
+    echo "Error: Cannot write to $(dirname "$INSTALL_PATH")." >&2
+    echo "Re-run with: sudo ./install.sh" >&2
+    exit 1
+fi
+
 # Check for claude CLI
 if ! command -v claude &>/dev/null; then
     echo "Error: 'claude' CLI is required but not found." >&2
@@ -24,8 +31,11 @@ chmod +x "$INSTALL_PATH"
 echo ""
 echo "=== Installation complete ==="
 echo ""
-echo "Usage: claude2doc"
+echo "You can now run 'claude2doc' from anywhere."
 echo ""
-echo "Prerequisites:"
-echo "  - claude CLI with Toolshed MCP configured"
-echo "  - Toolshed OAuth for private docs: https://toolshed.corp.stripe.com/oauth"
+echo "Before first use, make sure you have:"
+echo "  1. Toolshed Google Drive MCP added:"
+echo "     claude mcp add --scope=user --transport stdio toolshed_gdrive '\${TOOLSHED_STDIO_SHIM}' google_drive"
+echo ""
+echo "  2. Toolshed OAuth delegated:"
+echo "     https://toolshed.corp.stripe.com/oauth"
