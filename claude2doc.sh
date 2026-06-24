@@ -33,6 +33,9 @@ if [[ -z "${content// /}" ]]; then
     exit 1
 fi
 
+# Strip Claude Code formatting artifacts (▎ prefix used for indented/quoted blocks)
+content=$(echo "$content" | sed 's/^[[:space:]]*▎[[:space:]]\{0,1\}//')
+
 # Get the target document (if not passed via --doc)
 if [[ -z "$target" ]]; then
     echo "---" >&2
@@ -50,8 +53,43 @@ fi
 if [[ "$target" == *"docs.google.com/document/d/"* ]]; then
     doc_id=$(echo "$target" | sed -n 's|.*docs.google.com/document/d/\([^/]*\).*|\1|p')
 elif [[ "$target" == "new" ]]; then
-    echo "Error: 'new' doc creation is not yet supported. Please provide an existing doc URL or ID." >&2
-    exit 1
+    echo "Title for the new doc:" >&2
+    read -r doc_title </dev/tty
+    if [[ -z "$doc_title" ]]; then
+        doc_title="Claude Output $(date '+%Y-%m-%d %H:%M')"
+    fi
+
+    echo "" >&2
+    echo "Creating new doc: $doc_title ..." >&2
+
+    prompt_file=$(mktemp)
+    cat > "$prompt_file" <<PROMPT
+Use the create_google_drive_doc tool to create a new Google Doc with title '$doc_title'. Set content_format to 'markdown'. Pass the following as the contents parameter (do not wrap in code fences):
+
+$content
+PROMPT
+
+    output=$(claude -p --allowedTools 'mcp__toolshed_gdrive__create_google_drive_doc' < "$prompt_file" 2>&1)
+    rm -f "$prompt_file"
+
+    if echo "$output" | grep -qi "error\|failed\|permission\|denied"; then
+        echo "" >&2
+        echo "Error: Doc creation failed." >&2
+        echo "$output" >&2
+        exit 1
+    fi
+
+    doc_url=$(echo "$output" | grep -oE 'https://docs\.google\.com/document/d/[^[:space:]"]+' | head -1)
+    if [[ -n "$doc_url" ]]; then
+        echo "" >&2
+        echo "Done! New doc created:" >&2
+        echo "$doc_url"
+    else
+        echo "" >&2
+        echo "Done! Doc created. Output:" >&2
+        echo "$output" >&2
+    fi
+    exit 0
 else
     doc_id="$target"
 fi
@@ -67,7 +105,7 @@ echo "Appending to doc: $doc_id ..." >&2
 # Write prompt to a temp file to avoid shell interpretation issues
 prompt_file=$(mktemp)
 cat > "$prompt_file" <<PROMPT
-Use the append_to_google_drive_doc tool to append the following markdown to document ID '$doc_id'. Do not modify the content, append it exactly as-is. Here is the markdown content:
+Use the append_to_google_drive_doc tool to append to document ID '$doc_id'. Set content_format to 'markdown'. Pass the following as the markdown parameter (do not wrap in code fences):
 
 $content
 PROMPT
@@ -83,4 +121,5 @@ if echo "$output" | grep -qi "error\|failed\|permission\|denied"; then
 fi
 
 echo "" >&2
-echo "Done! Content appended to: https://docs.google.com/document/d/${doc_id}/edit" >&2
+echo "Done! Content appended to:" >&2
+echo "https://docs.google.com/document/d/${doc_id}/edit"
