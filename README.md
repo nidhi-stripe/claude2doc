@@ -57,6 +57,37 @@ claude2doc --doc https://docs.google.com/document/d/1abc123def456/edit
 
 Then just paste content and press Ctrl+D.
 
+### Create a new doc
+
+```bash
+claude2doc --doc new
+```
+
+You'll be prompted for a title. The new doc URL is printed when done.
+
+### Doc bookmarks
+
+Save a bookmark so you never have to paste a URL again:
+
+```bash
+claude2doc --save prd https://docs.google.com/document/d/1abc123def456/edit
+claude2doc --doc prd   # uses the saved URL
+```
+
+List all saved bookmarks:
+
+```bash
+claude2doc --list
+```
+
+Remove a bookmark:
+
+```bash
+claude2doc --remove prd
+```
+
+Bookmarks are stored in `~/.claude2doc.json`.
+
 ### Piped input
 
 ```bash

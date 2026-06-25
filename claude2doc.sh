@@ -1,16 +1,90 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+BOOKMARKS_FILE="$HOME/.claude2doc.json"
+
+# Ensure bookmarks file exists
+if [[ ! -f "$BOOKMARKS_FILE" ]]; then
+    echo '{}' > "$BOOKMARKS_FILE"
+fi
+
+# Resolve a bookmark name to a URL/ID, or return the input unchanged
+resolve_bookmark() {
+    local input="$1"
+    if [[ "$input" == *"docs.google.com"* || "$input" =~ ^[a-zA-Z0-9_-]{20,}$ ]]; then
+        echo "$input"
+        return
+    fi
+    local resolved
+    resolved=$(python3 -c "import json,sys; d=json.load(open('$BOOKMARKS_FILE')); print(d.get(sys.argv[1],''))" "$input" 2>/dev/null)
+    if [[ -n "$resolved" ]]; then
+        echo "$resolved"
+    else
+        echo "Error: No bookmark named '$input'. Use --save to create one." >&2
+        exit 1
+    fi
+}
+
 # Parse arguments
 target=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --save)
+            if [[ $# -lt 3 ]]; then
+                echo "Usage: claude2doc --save <name> <URL|ID>" >&2
+                exit 1
+            fi
+            bookmark_name="$2"
+            bookmark_target="$3"
+            python3 -c "
+import json, sys
+f = '$BOOKMARKS_FILE'
+d = json.load(open(f))
+d[sys.argv[1]] = sys.argv[2]
+json.dump(d, open(f, 'w'), indent=2)
+" "$bookmark_name" "$bookmark_target"
+            echo "Saved bookmark '$bookmark_name' → $bookmark_target" >&2
+            exit 0
+            ;;
+        --remove)
+            if [[ $# -lt 2 ]]; then
+                echo "Usage: claude2doc --remove <name>" >&2
+                exit 1
+            fi
+            bookmark_name="$2"
+            python3 -c "
+import json, sys
+f = '$BOOKMARKS_FILE'
+d = json.load(open(f))
+name = sys.argv[1]
+if name not in d:
+    print(f\"Error: No bookmark named '{name}'.\", file=sys.stderr)
+    sys.exit(1)
+del d[name]
+json.dump(d, open(f, 'w'), indent=2)
+" "$bookmark_name"
+            echo "Removed bookmark '$bookmark_name'" >&2
+            exit 0
+            ;;
+        --list)
+            echo "Saved bookmarks:" >&2
+            python3 -c "
+import json
+d = json.load(open('$BOOKMARKS_FILE'))
+if not d:
+    print('  (none)')
+else:
+    for k, v in d.items():
+        print(f'  {k} → {v}')
+"
+            exit 0
+            ;;
         --doc)
             target="$2"
             shift 2
             ;;
         *)
-            echo "Usage: claude2doc [--doc <URL|ID>]" >&2
+            echo "Usage: claude2doc [--doc <URL|ID|bookmark>] [--save <name> <URL|ID>] [--remove <name>] [--list]" >&2
             exit 1
             ;;
     esac
@@ -40,13 +114,18 @@ content=$(echo "$content" | sed 's/^[[:space:]]*▎[[:space:]]\{0,1\}//')
 if [[ -z "$target" ]]; then
     echo "---" >&2
     echo "" >&2
-    echo "Target Google Doc (paste URL, doc ID, or type 'new'):" >&2
+    echo "Target Google Doc (paste URL, doc ID, bookmark name, or type 'new'):" >&2
     read -r target </dev/tty
 
     if [[ -z "$target" ]]; then
         echo "Error: No target provided." >&2
         exit 1
     fi
+fi
+
+# Resolve bookmark if target is not a URL, ID, or 'new'
+if [[ "$target" != "new" ]]; then
+    target=$(resolve_bookmark "$target")
 fi
 
 # Extract doc ID from URL if needed
